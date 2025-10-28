@@ -1,5 +1,5 @@
 """
-Dataset and DataLoader for DeepOSWSRM Training
+Dataset and DataLoader for DeepOSWSRM Training - FIXED VERSION
 """
 
 import torch
@@ -12,6 +12,7 @@ from pathlib import Path
 import json
 import albumentations as A
 from albumentations.pytorch import ToTensorV2
+import cv2
 
 
 class DeepOSWSRMDataset(Dataset):
@@ -98,15 +99,13 @@ class DeepOSWSRMDataset(Dataset):
             fine_mask: Fine resolution binary mask [H*scale, W*scale]
         
         Returns:
-            Coarse resolution fraction map [H, W] - same size as input
+            Coarse resolution fraction map [H, W]
         """
-        import cv2
-        # The target fraction should be at the same resolution as the input
-        # which is (patch_size, patch_size), not downsampled
+        # The target fraction should be at coarse resolution (patch_size × patch_size)
         h_coarse = self.patch_size
         w_coarse = self.patch_size
         
-        # Resize fine mask to coarse resolution and compute average
+        # Downsample fine mask to coarse resolution using INTER_AREA (averages values)
         fraction = cv2.resize(fine_mask.astype(np.float32), 
                             (w_coarse, h_coarse), 
                             interpolation=cv2.INTER_AREA)
@@ -187,108 +186,71 @@ class DeepOSWSRMDataset(Dataset):
         s1_data = self._load_image(sample_info['sentinel1'])
         s2_data = self._load_image(sample_info['sentinel2'])
         water_mask = self._load_image(sample_info['water_mask'])
-        # Debug: check mask shape consistency
-        print(f"Water mask shape: {water_mask.shape}, should be: {s1_data.shape[1]*self.scale_factor}×{s1_data.shape[2]*self.scale_factor}")
-
         
         # Handle single channel mask
         if water_mask.shape[0] == 1:
             water_mask = water_mask[0]
         
-        # Get random patch location
-        h, w = s1_data.shape[1:]
+        # Get dimensions
+        h_coarse, w_coarse = s1_data.shape[1:]
+        h_mask, w_mask = water_mask.shape
+        
+        # Verify mask is at fine resolution
+        expected_h_fine = h_coarse * self.scale_factor
+        expected_w_fine = w_coarse * self.scale_factor
+        
+        # If mask dimensions don't match, resize it
+        if h_mask != expected_h_fine or w_mask != expected_w_fine:
+            water_mask = cv2.resize(water_mask, (expected_w_fine, expected_h_fine), 
+                                   interpolation=cv2.INTER_NEAREST)
+            h_mask, w_mask = water_mask.shape
         
         # Ensure we can extract full patch
-        if h < self.patch_size or w < self.patch_size:
+        if h_coarse < self.patch_size or w_coarse < self.patch_size:
             # Pad if needed
-            pad_h = max(0, self.patch_size - h)
-            pad_w = max(0, self.patch_size - w)
+            pad_h = max(0, self.patch_size - h_coarse)
+            pad_w = max(0, self.patch_size - w_coarse)
             s1_data = np.pad(s1_data, ((0, 0), (0, pad_h), (0, pad_w)), mode='reflect')
             s2_data = np.pad(s2_data, ((0, 0), (0, pad_h), (0, pad_w)), mode='reflect')
-            water_mask = np.pad(water_mask, ((0, pad_h), (0, pad_w)), mode='reflect')
-            h, w = s1_data.shape[1:]
+            
+            # Also pad water mask
+            pad_h_mask = pad_h * self.scale_factor
+            pad_w_mask = pad_w * self.scale_factor
+            water_mask = np.pad(water_mask, ((0, pad_h_mask), (0, pad_w_mask)), mode='reflect')
+            
+            h_coarse, w_coarse = s1_data.shape[1:]
+            h_mask, w_mask = water_mask.shape
         
-        # Random crop
-        top = np.random.randint(0, h - self.patch_size + 1)
-        left = np.random.randint(0, w - self.patch_size + 1)
+        # Random crop at coarse resolution
+        top = np.random.randint(0, h_coarse - self.patch_size + 1)
+        left = np.random.randint(0, w_coarse - self.patch_size + 1)
         
         s1_patch = s1_data[:, top:top+self.patch_size, left:left+self.patch_size]
         s2_patch = s2_data[:, top:top+self.patch_size, left:left+self.patch_size]
         
         # Extract corresponding fine resolution patch
-        # After loading water_mask
-        print(f"Water mask shape: {water_mask.shape}, should be: {h*self.scale_factor}×{w*self.scale_factor}")
-
-        # Get dimensions
-        h, w = s1_data.shape[1:]
-        h_mask, w_mask = water_mask.shape
-
-        # Calculate the scale ratio (should be close to scale_factor)
-        actual_scale_h = h_mask / h
-        actual_scale_w = w_mask / w
-
-        # Ensure we can extract full patch
-        if h < self.patch_size or w < self.patch_size:
-            # Pad if needed
-            pad_h = max(0, self.patch_size - h)
-            pad_w = max(0, self.patch_size - w)
-            s1_data = np.pad(s1_data, ((0, 0), (0, pad_h), (0, pad_w)), mode='reflect')
-            s2_data = np.pad(s2_data, ((0, 0), (0, pad_h), (0, pad_w)), mode='reflect')
-            
-            # Also pad water mask proportionally
-            pad_h_mask = int(pad_h * actual_scale_h)
-            pad_w_mask = int(pad_w * actual_scale_w)
-            water_mask = np.pad(water_mask, ((0, pad_h_mask), (0, pad_w_mask)), mode='reflect')
-            
-            h, w = s1_data.shape[1:]
-            h_mask, w_mask = water_mask.shape
-
-        # Random crop at coarse resolution
-        top = np.random.randint(0, h - self.patch_size + 1)
-        left = np.random.randint(0, w - self.patch_size + 1)
-
-        s1_patch = s1_data[:, top:top+self.patch_size, left:left+self.patch_size]
-        s2_patch = s2_data[:, top:top+self.patch_size, left:left+self.patch_size]
-
-        # Extract corresponding fine resolution patch using actual scale
-        top_fine = int(top * actual_scale_h)
-        left_fine = int(left * actual_scale_w)
-        fine_patch_h = int(self.patch_size * actual_scale_h)
-        fine_patch_w = int(self.patch_size * actual_scale_w)
-
-        water_patch = water_mask[top_fine:top_fine+fine_patch_h, 
-                                left_fine:left_fine+fine_patch_w]
-
-        # Ensure water_patch is exactly the right size (may be off by 1-2 pixels due to rounding)
+        top_fine = top * self.scale_factor
+        left_fine = left * self.scale_factor
+        
+        water_patch = water_mask[top_fine:top_fine+self.fine_patch_size, 
+                                 left_fine:left_fine+self.fine_patch_size]
+        
+        # Ensure exact size
         if water_patch.shape != (self.fine_patch_size, self.fine_patch_size):
-            import cv2
             water_patch = cv2.resize(water_patch, (self.fine_patch_size, self.fine_patch_size), 
                                     interpolation=cv2.INTER_NEAREST)
         
-        # Compute water fraction
+        # Compute water fraction (coarse resolution)
         water_fraction = self._compute_fraction(water_patch)
         
         # Apply augmentation (on numpy arrays)
         if self.transform:
-            # Augment all together to maintain correspondence
-            combined = np.concatenate([
-                s1_patch,
-                s2_patch,
-            ], axis=0)
+            # Prepare images for augmentation
+            combined = np.concatenate([s1_patch, s2_patch], axis=0)
+            combined = np.transpose(combined, (1, 2, 0))  # CHW -> HWC
             
-            # Convert to HWC for albumentations
-            combined = np.transpose(combined, (1, 2, 0))
-            water_patch_hwc = water_patch
-            
-            import cv2
-
-            # Ensure image and mask have the same H×W before transform
-            h, w = combined.shape[:2]
-            mh, mw = water_patch_hwc.shape[:2]
-            if (h != mh) or (w != mw):
-                water_patch_hwc = cv2.resize(water_patch_hwc, (w, h), interpolation=cv2.INTER_NEAREST)
-
-            augmented = self.transform(image=combined, mask=water_patch_hwc)
+            # Augment (image and mask must have same H×W)
+            augmented = self.transform(image=combined, mask=water_patch)
             combined = augmented['image']
             water_patch = augmented['mask']
             
@@ -408,6 +370,13 @@ if __name__ == "__main__":
                 print(f"  {key}: {value.shape}")
             else:
                 print(f"  {key}: {value}")
+        
+        # Verify dimensions
+        print("\nDimension checks:")
+        print(f"  Sentinel-1: {sample['sentinel1'].shape} (expected: [2, 64, 64])")
+        print(f"  Sentinel-2: {sample['sentinel2'].shape} (expected: [4, 64, 64])")
+        print(f"  Water fraction: {sample['water_fraction'].shape} (expected: [1, 64, 64])")
+        print(f"  Water map: {sample['water_map'].shape} (expected: [1, 256, 256])")
         
         # Test dataloader
         print("\nTesting dataloader...")

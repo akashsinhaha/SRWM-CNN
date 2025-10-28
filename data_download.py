@@ -1,5 +1,5 @@
 """
-Data Download and Preprocessing for DeepOSWSRM
+Data Download and Preprocessing for DeepOSWSRM - FIXED VERSION
 
 This script handles:
 1. Downloading Sentinel-1 and Sentinel-2 data from Google Earth Engine
@@ -16,6 +16,7 @@ from datetime import datetime, timedelta
 import geemap
 from tqdm import tqdm
 import json
+import cv2
 
 
 class SentinelDataDownloader:
@@ -60,10 +61,8 @@ class SentinelDataDownloader:
                         .filter(ee.Filter.eq('orbitProperties_pass', orbit))
                         .filter(ee.Filter.eq('instrumentMode', 'IW')))
         
-        
         # Get median composite to reduce speckle
         s1_image = s1_collection.median().select(['VV', 'VH'])
-
         
         return s1_image
     
@@ -93,10 +92,6 @@ class SentinelDataDownloader:
     def get_landsat_reference(self, roi, start_date, end_date, cloud_cover=20):
         """
         Get Landsat-8/9 image as high-resolution reference (30m, free alternative to PlanetScope)
-        
-        For better resolution, we can also use:
-        - Sentinel-2 at 10m (same as input but can use different dates)
-        - Landsat pan-sharpened to 15m
         
         Args:
             roi: Region of interest
@@ -195,13 +190,11 @@ class SentinelDataDownloader:
         s2_path = os.path.join(output_dir, f"{site_name}_S2.tif")
         self.download_image(s2_image, roi, s2_path, scale=10)
         
-        # Download reference data (Sentinel-2 at higher temporal resolution or Landsat)
-        print("Downloading reference data (Landsat/Sentinel-2)...")
-        ref_image = self.get_landsat_reference(roi, start_date, end_date)
+        # Download reference data (Sentinel-2 at same resolution for consistency)
+        print("Downloading reference data...")
+        ref_image = self.get_sentinel2_image(roi, start_date, end_date, cloud_cover=10)
         ref_path = os.path.join(output_dir, f"{site_name}_reference.tif")
-        # For reference, use higher resolution if possible
-        ref_scale = 10 // scale_factor if scale_factor <= 4 else 10
-        self.download_image(ref_image, roi, ref_path, scale=ref_scale)
+        self.download_image(ref_image, roi, ref_path, scale=10)
         
         return {
             'sentinel1': s1_path,
@@ -209,7 +202,8 @@ class SentinelDataDownloader:
             'reference': ref_path,
             'site_name': site_name,
             'roi': roi.getInfo(),
-            'dates': {'start': start_date, 'end': end_date}
+            'dates': {'start': start_date, 'end': end_date},
+            'scale_factor': scale_factor
         }
 
 
@@ -225,37 +219,23 @@ class WaterIndexCalculator:
         return (green - nir) / (green + nir + 1e-8)
     
     @staticmethod
-    def mndwi(green, swir):
+    def create_water_mask(image_path, method='ndwi', threshold=0, scale_factor=4):
         """
-        Modified NDWI
-        MNDWI = (Green - SWIR) / (Green + SWIR)
-        """
-        return (green - swir) / (green + swir + 1e-8)
-    
-    @staticmethod
-    def awei_nsh(blue, green, nir, swir1, swir2):
-        """
-        Automated Water Extraction Index (no shadow)
-        AWEInsh = 4 * (Green - SWIR1) - (0.25 * NIR + 2.75 * SWIR2)
-        """
-        return 4 * (green - swir1) - (0.25 * nir + 2.75 * swir2)
-    
-    @staticmethod
-    def create_water_mask(image_path, method='ndwi', threshold=0):
-        """
-        Create binary water mask from multispectral image
+        Create binary water mask from multispectral image at FINE resolution
         
         Args:
-            image_path: Path to image file
+            image_path: Path to reference image file
             method: Water index method ('ndwi', 'mndwi', 'awei')
             threshold: Threshold value
+            scale_factor: Super-resolution scale factor
         
         Returns:
-            Binary water mask as numpy array
+            Binary water mask at fine resolution (H*scale, W*scale)
         """
         with rasterio.open(image_path) as src:
-            # Assuming bands: Blue, Green, Red, NIR
+            # Read at original resolution
             bands = src.read()
+            profile = src.profile.copy()
             
             if method == 'ndwi' and bands.shape[0] >= 4:
                 green = bands[1].astype(float)
@@ -266,76 +246,36 @@ class WaterIndexCalculator:
                 nir = bands[-1].astype(float)
                 index = -nir  # Water has low NIR
             
-            # Create binary mask
-            water_mask = (index > threshold).astype(np.uint8)
+            # Create binary mask at original resolution
+            water_mask_coarse = (index > threshold).astype(np.uint8)
             
-            return water_mask, src.transform, src.crs
-
-
-class CloudSimulator:
-    """Simulate cloud cover for training data augmentation"""
-    
-    @staticmethod
-    def generate_cloud_mask(shape, coverage_rate=0.5, num_clouds=5):
-        """
-        Generate realistic cloud mask
-        
-        Args:
-            shape: (height, width) of the image
-            coverage_rate: Target cloud coverage (0-1)
-            num_clouds: Number of cloud patches
-        
-        Returns:
-            Binary cloud mask (1 = cloud, 0 = clear)
-        """
-        height, width = shape
-        mask = np.zeros((height, width), dtype=np.uint8)
-        
-        for _ in range(num_clouds):
-            # Random cloud center
-            center_y = np.random.randint(0, height)
-            center_x = np.random.randint(0, width)
+            # Now upsample to fine resolution
+            h_coarse, w_coarse = water_mask_coarse.shape
+            h_fine = h_coarse * scale_factor
+            w_fine = w_coarse * scale_factor
             
-            # Random cloud size
-            size_y = np.random.randint(height // 10, height // 3)
-            size_x = np.random.randint(width // 10, width // 3)
+            # Use nearest neighbor interpolation for binary masks
+            water_mask_fine = cv2.resize(
+                water_mask_coarse, 
+                (w_fine, h_fine), 
+                interpolation=cv2.INTER_NEAREST
+            )
             
-            # Create elliptical cloud
-            y_grid, x_grid = np.ogrid[:height, :width]
-            cloud = ((y_grid - center_y) ** 2 / size_y ** 2 + 
-                    (x_grid - center_x) ** 2 / size_x ** 2) <= 1
+            print(f"  Created water mask: {h_coarse}×{w_coarse} → {h_fine}×{w_fine} (scale {scale_factor}x)")
             
-            mask = np.logical_or(mask, cloud).astype(np.uint8)
+            # Update profile for fine resolution
+            profile.update({
+                'count': 1,
+                'dtype': rasterio.uint8,
+                'height': h_fine,
+                'width': w_fine,
+                'transform': src.transform * src.transform.scale(
+                    src.width / w_fine,
+                    src.height / h_fine
+                )
+            })
             
-            # Check coverage
-            current_coverage = mask.sum() / mask.size
-            if current_coverage >= coverage_rate:
-                break
-        
-        return mask
-    
-    @staticmethod
-    def apply_cloud_mask(image, cloud_mask, fill_value=0):
-        """
-        Apply cloud mask to image
-        
-        Args:
-            image: Image array [C, H, W] or [H, W]
-            cloud_mask: Binary mask [H, W]
-            fill_value: Value to fill clouded areas
-        
-        Returns:
-            Masked image
-        """
-        if image.ndim == 3:
-            cloud_mask_3d = np.repeat(cloud_mask[np.newaxis, :, :], image.shape[0], axis=0)
-            masked_image = image.copy()
-            masked_image[cloud_mask_3d == 1] = fill_value
-        else:
-            masked_image = image.copy()
-            masked_image[cloud_mask == 1] = fill_value
-        
-        return masked_image
+            return water_mask_fine, profile
 
 
 def prepare_sample_training_sites():
@@ -344,7 +284,6 @@ def prepare_sample_training_sites():
     
     Returns list of dictionaries with ROI and date information
     """
-    # Example sites - you can modify these
     sites = [
         {
             'name': 'Rabindra_Sarobar',
@@ -364,7 +303,6 @@ def prepare_sample_training_sites():
             'start_date': '2023-06-01',
             'end_date': '2023-08-31'
         }
-
     ]
     
     return sites
@@ -374,8 +312,6 @@ def main():
     """Main function to download and prepare data"""
     
     # Initialize downloader
-    # If you get an error, you need to authenticate first:
-    # Run in terminal: earthengine authenticate
     print("Initializing Google Earth Engine...")
     try:
         downloader = SentinelDataDownloader()
@@ -386,7 +322,8 @@ def main():
         print("3. Follow the authentication process")
         return
     
-    # Output directory
+    # Configuration
+    scale_factor = 4  # Set your desired scale factor
     output_base_dir = './deeposwsrm_data'
     os.makedirs(output_base_dir, exist_ok=True)
     
@@ -403,76 +340,60 @@ def main():
                 end_date=site['end_date'],
                 output_dir=os.path.join(output_base_dir, site['name']),
                 site_name=site['name'],
-                scale_factor=4
+                scale_factor=scale_factor
             )
             all_samples.append(sample_data)
         except Exception as e:
             print(f"Error processing site {site['name']}: {e}")
             continue
     
+    # Create water masks from reference images
+    print("\n" + "="*60)
+    print("Creating water masks at fine resolution...")
+    print("="*60)
+    
+    for sample in all_samples:
+        try:
+            ref_path = sample['reference']
+            site_name = sample['site_name']
+            scale_factor = sample['scale_factor']
+            
+            print(f"\nProcessing {site_name}...")
+            
+            # Create fine-resolution water mask
+            water_mask_fine, profile = WaterIndexCalculator.create_water_mask(
+                ref_path, 
+                method='ndwi', 
+                threshold=0,
+                scale_factor=scale_factor
+            )
+            
+            # Save water mask
+            mask_path = ref_path.replace('_reference.tif', '_water_mask.tif')
+            with rasterio.open(mask_path, 'w', **profile) as dst:
+                dst.write(water_mask_fine, 1)
+            
+            print(f"  Saved: {mask_path}")
+            sample['water_mask'] = mask_path
+            
+        except Exception as e:
+            print(f"  Error creating water mask for {sample['site_name']}: {e}")
+            import traceback
+            traceback.print_exc()
+    
     # Save metadata
     metadata_path = os.path.join(output_base_dir, 'metadata.json')
     with open(metadata_path, 'w') as f:
         json.dump(all_samples, f, indent=2)
     
-    print(f"\nData preparation complete!")
+    print("\n" + "="*60)
+    print("Data preparation complete!")
+    print("="*60)
     print(f"Downloaded {len(all_samples)} training samples")
     print(f"Metadata saved to: {metadata_path}")
-    
-    # Create water masks from reference images
-    print("\nCreating water masks from reference images...")
-    for sample in all_samples:
-        try:
-            ref_path = sample['reference']
-            water_mask, transform, crs = WaterIndexCalculator.create_water_mask(
-                ref_path, method='ndwi', threshold=0
-            )
-            
-            # IMPORTANT: Upsample water mask to fine resolution
-            # For scale_factor=4, if input is 64×64, mask should be 256×256
-            import cv2
-            scale_factor = 4  # Match your training scale factor
-            h_current, w_current = water_mask.shape
-            h_fine = h_current * scale_factor
-            w_fine = w_current * scale_factor
-            
-            water_mask_fine = cv2.resize(
-                water_mask.astype(np.uint8), 
-                (w_fine, h_fine), 
-                interpolation=cv2.INTER_NEAREST  # Use nearest neighbor for binary masks
-            )
-            
-            print(f"Upsampled water mask from {h_current}×{w_current} to {h_fine}×{w_fine}")
-            
-            # Save water mask at fine resolution
-            mask_path = ref_path.replace('_reference.tif', '_water_mask.tif')
-            with rasterio.open(ref_path) as src:
-                profile = src.profile.copy()
-                profile.update(
-                    count=1, 
-                    dtype=rasterio.uint8,
-                    height=h_fine,
-                    width=w_fine,
-                    transform=src.transform * src.transform.scale(
-                        src.width / w_fine,
-                        src.height / h_fine
-                    )
-                )
-                
-                with rasterio.open(mask_path, 'w', **profile) as dst:
-                    dst.write(water_mask_fine, 1)
-            
-            print(f"Created water mask: {mask_path}")
-            sample['water_mask'] = mask_path
-        except Exception as e:
-            print(f"Error creating water mask for {sample['site_name']}: {e}")
-    
-    # Update metadata with water masks
-    with open(metadata_path, 'w') as f:
-        json.dump(all_samples, f, indent=2)
-    
-    print("\nAll done! Your data is ready for training.")
-    print(f"Check the '{output_base_dir}' directory for your data.")
+    print(f"\nNext steps:")
+    print(f"1. Check your data: ls {output_base_dir}")
+    print(f"2. Train the model: python train.py --data_dir {output_base_dir} --scale_factor {scale_factor}")
 
 
 if __name__ == "__main__":
