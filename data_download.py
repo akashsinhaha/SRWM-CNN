@@ -299,13 +299,6 @@ def prepare_sample_training_sites():
             'end_date': '2024-08-31'
         },
         {
-            # bad quality data - keep for testing
-            'name': 'Nalban_Lake',
-            'roi': ee.Geometry.Rectangle([88.4160, 22.5740, 88.4280, 22.5840]),
-            'start_date': '2023-06-01',
-            'end_date': '2024-08-31'
-        },
-        {
             'name': 'Santragachi_Jheel',
             'roi': ee.Geometry.Rectangle([88.2850, 22.5700, 88.2950, 22.5800]),
             'start_date': '2023-06-01',
@@ -397,14 +390,6 @@ def prepare_sample_training_sites():
             'start_date': '2023-06-01',
             'end_date': '2024-08-31'
         },
-        {
-            # bad quality data - keep for testing
-            'name': 'Narmada_Gujarat',
-            'roi': ee.Geometry.Rectangle([73.0000, 21.8000, 73.0500, 21.8500]),
-            'start_date': '2023-06-01',
-            'end_date': '2024-08-31'
-        },
-        
         # Coastal areas
         {
             'name': 'Mumbai_Harbor',
@@ -415,6 +400,18 @@ def prepare_sample_training_sites():
         {
             'name': 'Chennai_Marina',
             'roi': ee.Geometry.Rectangle([80.2700, 13.0400, 80.3100, 13.0800]),
+            'start_date': '2023-06-01',
+            'end_date': '2024-08-31'
+        },
+        {
+            'name': 'Visakhapatnam_Bay',
+            'roi': ee.Geometry.Rectangle([83.3000, 17.6800, 83.3400, 17.7200]),
+            'start_date': '2023-06-01',
+            'end_date': '2024-08-31'
+        },
+        {
+            'name': 'Kochi_Coast',
+            'roi': ee.Geometry.Rectangle([76.2400, 9.9500, 76.2800, 9.9900]),
             'start_date': '2023-06-01',
             'end_date': '2024-08-31'
         }
