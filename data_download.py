@@ -285,23 +285,138 @@ def prepare_sample_training_sites():
     Returns list of dictionaries with ROI and date information
     """
     sites = [
+        # Kolkata Region
         {
             'name': 'Rabindra_Sarobar',
             'roi': ee.Geometry.Rectangle([88.3445, 22.5085, 88.3555, 22.5185]),
             'start_date': '2023-06-01',
-            'end_date': '2023-08-31'
+            'end_date': '2024-08-31'
         },
         {
             'name': 'East_Kolkata_Wetlands',
             'roi': ee.Geometry.Rectangle([88.4400, 22.5150, 88.4500, 22.5250]),
             'start_date': '2023-06-01',
-            'end_date': '2023-08-31'
+            'end_date': '2024-08-31'
         },
         {
+            # bad quality data - keep for testing
             'name': 'Nalban_Lake',
             'roi': ee.Geometry.Rectangle([88.4160, 22.5740, 88.4280, 22.5840]),
             'start_date': '2023-06-01',
-            'end_date': '2023-08-31'
+            'end_date': '2024-08-31'
+        },
+        {
+            'name': 'Santragachi_Jheel',
+            'roi': ee.Geometry.Rectangle([88.2850, 22.5700, 88.2950, 22.5800]),
+            'start_date': '2023-06-01',
+            'end_date': '2024-08-31'
+        },
+        {
+            'name': 'Subhas_Sarobar',
+            'roi': ee.Geometry.Rectangle([88.3900, 22.5570, 88.4000, 22.5670]),
+            'start_date': '2023-06-01',
+            'end_date': '2024-08-31'
+        },
+        
+        # West Bengal - Other regions
+        {
+            'name': 'Digha_Beach',
+            'roi': ee.Geometry.Rectangle([87.5200, 21.6200, 87.5400, 21.6400]),
+            'start_date': '2023-06-01',
+            'end_date': '2024-08-31'
+        },
+        {
+            'name': 'Sundarbans_Creek',
+            'roi': ee.Geometry.Rectangle([88.9500, 22.0500, 88.9700, 22.0700]),
+            'start_date': '2023-06-01',
+            'end_date': '2024-08-31'
+        },
+        
+        # Major Indian Water Bodies
+        {
+            'name': 'Dal_Lake_Kashmir',
+            'roi': ee.Geometry.Rectangle([74.8600, 34.0800, 74.8900, 34.1100]),
+            'start_date': '2023-06-01',
+            'end_date': '2024-08-31'
+        },
+        {
+            'name': 'Chilika_Lake_Odisha',
+            'roi': ee.Geometry.Rectangle([85.3200, 19.6800, 85.3600, 19.7200]),
+            'start_date': '2023-06-01',
+            'end_date': '2024-08-31'
+        },
+        {
+            'name': 'Vembanad_Lake_Kerala',
+            'roi': ee.Geometry.Rectangle([76.3500, 9.5800, 76.3900, 9.6200]),
+            'start_date': '2023-06-01',
+            'end_date': '2024-08-31'
+        },
+        {
+            'name': 'Loktak_Lake_Manipur',
+            'roi': ee.Geometry.Rectangle([93.7600, 24.5200, 93.8000, 24.5600]),
+            'start_date': '2023-06-01',
+            'end_date': '2024-08-31'
+        },
+        {
+            'name': 'Pulicat_Lake_TN',
+            'roi': ee.Geometry.Rectangle([80.3000, 13.4200, 80.3400, 13.4600]),
+            'start_date': '2023-06-01',
+            'end_date': '2024-08-31'
+        },
+        
+        # Reservoirs
+        {
+            'name': 'Hirakud_Reservoir_Odisha',
+            'roi': ee.Geometry.Rectangle([83.8500, 21.5200, 83.9000, 21.5700]),
+            'start_date': '2023-06-01',
+            'end_date': '2024-08-31'
+        },
+        {
+            'name': 'Nagarjuna_Sagar_AP',
+            'roi': ee.Geometry.Rectangle([79.3000, 16.5500, 79.3500, 16.6000]),
+            'start_date': '2023-06-01',
+            'end_date': '2024-08-31'
+        },
+        {
+            'name': 'Gobind_Sagar_HP',
+            'roi': ee.Geometry.Rectangle([76.4200, 31.4000, 76.4700, 31.4500]),
+            'start_date': '2023-06-01',
+            'end_date': '2024-08-31'
+        },
+        
+        # Rivers
+        {
+            'name': 'Hooghly_River_Kolkata',
+            'roi': ee.Geometry.Rectangle([88.3200, 22.5500, 88.3500, 22.5800]),
+            'start_date': '2023-06-01',
+            'end_date': '2024-08-31'
+        },
+        {
+            'name': 'Brahmaputra_Assam',
+            'roi': ee.Geometry.Rectangle([91.7000, 26.1500, 91.7500, 26.2000]),
+            'start_date': '2023-06-01',
+            'end_date': '2024-08-31'
+        },
+        {
+            # bad quality data - keep for testing
+            'name': 'Narmada_Gujarat',
+            'roi': ee.Geometry.Rectangle([73.0000, 21.8000, 73.0500, 21.8500]),
+            'start_date': '2023-06-01',
+            'end_date': '2024-08-31'
+        },
+        
+        # Coastal areas
+        {
+            'name': 'Mumbai_Harbor',
+            'roi': ee.Geometry.Rectangle([72.8300, 18.9000, 72.8700, 18.9400]),
+            'start_date': '2023-06-01',
+            'end_date': '2024-08-31'
+        },
+        {
+            'name': 'Chennai_Marina',
+            'roi': ee.Geometry.Rectangle([80.2700, 13.0400, 80.3100, 13.0800]),
+            'start_date': '2023-06-01',
+            'end_date': '2024-08-31'
         }
     ]
     

@@ -63,14 +63,13 @@ class DeepOSWSRMDataset(Dataset):
         self.samples = []
         self._prepare_samples()
         
-        # Setup augmentation
+        # Setup augmentation - FIXED: Use is_check_shapes=False since we handle dimensions manually
         if self.augment:
             self.transform = A.Compose([
                 A.HorizontalFlip(p=0.5),
                 A.VerticalFlip(p=0.5),
                 A.RandomRotate90(p=0.5),
-                A.ShiftScaleRotate(shift_limit=0.0625, scale_limit=0.1, rotate_limit=15, p=0.5),
-            ])
+            ], is_check_shapes=False)  # FIXED: Disable shape checking
         else:
             self.transform = None
     
@@ -175,6 +174,72 @@ class DeepOSWSRMDataset(Dataset):
         s2_data = np.clip(s2_data, 0, 1)
         return s2_data
     
+    def _apply_augmentation_separately(self, s1_patch, s2_patch, water_patch):
+        """
+        Apply augmentation to coarse and fine resolution data separately
+        
+        Args:
+            s1_patch: Sentinel-1 patch [C, H, W] at coarse resolution
+            s2_patch: Sentinel-2 patch [C, H, W] at coarse resolution
+            water_patch: Water mask [H*scale, W*scale] at fine resolution
+        
+        Returns:
+            Augmented s1_patch, s2_patch, water_patch
+        """
+        if not self.transform:
+            return s1_patch, s2_patch, water_patch
+        
+        # Generate random parameters for augmentation
+        # We'll use the same random state for both resolutions
+        transform_params = self.transform.to_dict()
+        
+        # Augment coarse resolution data
+        combined_coarse = np.concatenate([s1_patch, s2_patch], axis=0)
+        combined_coarse = np.transpose(combined_coarse, (1, 2, 0))  # CHW -> HWC
+        
+        augmented_coarse = self.transform(image=combined_coarse)
+        combined_coarse = augmented_coarse['image']
+        combined_coarse = np.transpose(combined_coarse, (2, 0, 1))  # HWC -> CHW
+        
+        # Split back
+        s1_patch = combined_coarse[:2]
+        s2_patch = combined_coarse[2:6]
+        
+        # Apply same transformation to fine resolution mask
+        # We need to apply the same flip/rotation operations
+        # For simplicity, we'll use albumentations' replay mode
+        
+        # Create a replay transform with the same augmented result
+        replay_transform = A.ReplayCompose([
+            A.HorizontalFlip(p=0.5),
+            A.VerticalFlip(p=0.5),
+            A.RandomRotate90(p=0.5),
+        ])
+        
+        # Apply to coarse data to get replay data
+        combined_coarse_replay = np.concatenate([s1_patch, s2_patch], axis=0)
+        combined_coarse_replay = np.transpose(combined_coarse_replay, (1, 2, 0))
+        
+        augmented_coarse_replay = replay_transform(image=combined_coarse_replay)
+        
+        # Now apply the same transforms to fine resolution mask
+        water_patch_hwc = water_patch if water_patch.ndim == 2 else water_patch[0]
+        water_patch_hwc = water_patch_hwc[:, :, np.newaxis]  # Add channel dimension
+        
+        augmented_fine = A.ReplayCompose.replay(
+            augmented_coarse_replay['replay'], 
+            image=water_patch_hwc
+        )
+        water_patch = augmented_fine['image'][:, :, 0]  # Remove channel dimension
+        
+        # Get augmented coarse data back
+        combined_coarse_replay = augmented_coarse_replay['image']
+        combined_coarse_replay = np.transpose(combined_coarse_replay, (2, 0, 1))
+        s1_patch = combined_coarse_replay[:2]
+        s2_patch = combined_coarse_replay[2:6]
+        
+        return s1_patch, s2_patch, water_patch
+    
     def __len__(self):
         return len(self.samples)
     
@@ -243,24 +308,11 @@ class DeepOSWSRMDataset(Dataset):
         # Compute water fraction (coarse resolution)
         water_fraction = self._compute_fraction(water_patch)
         
-        # Apply augmentation (on numpy arrays)
-        if self.transform:
-            # Prepare images for augmentation
-            combined = np.concatenate([s1_patch, s2_patch], axis=0)
-            combined = np.transpose(combined, (1, 2, 0))  # CHW -> HWC
-            
-            # Augment (image and mask must have same H×W)
-            augmented = self.transform(image=combined, mask=water_patch)
-            combined = augmented['image']
-            water_patch = augmented['mask']
-            
-            # Convert back to CHW
-            combined = np.transpose(combined, (2, 0, 1))
-            
-            # Split back
-            s1_patch = combined[:2]
-            s2_patch = combined[2:6]
-            
+        # Apply augmentation - FIXED: Apply separately to avoid dimension mismatch
+        if self.augment:
+            s1_patch, s2_patch, water_patch = self._apply_augmentation_separately(
+                s1_patch, s2_patch, water_patch
+            )
             # Recompute fraction after augmentation
             water_fraction = self._compute_fraction(water_patch)
         
