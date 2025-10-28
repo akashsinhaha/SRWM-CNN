@@ -1,0 +1,620 @@
+# DeepOSWSRM: Complete Virtual Environment Setup Guide
+
+This guide walks you through setting up and running DeepOSWSRM in a Python virtual environment from scratch.
+
+---
+
+## 🚀 Complete Setup and Execution in Virtual Environment
+
+### Prerequisites
+- Python 3.8 or higher installed
+- At least 10GB free disk space
+- Internet connection
+
+---
+
+## STEP-BY-STEP GUIDE
+
+### Step 1: Download All Files
+
+First, download all the Python files to a folder on your computer. Let's say you put them in a folder called `deeposwsrm_project`.
+
+Your folder structure should look like:
+```
+deeposwsrm_project/
+├── deeposwsrm_model.py
+├── data_download.py
+├── dataset.py
+├── train.py
+├── inference.py
+├── requirements.txt
+├── README.md
+├── EXECUTION_GUIDE.md
+└── DeepOSWSRM_Colab.ipynb
+```
+
+---
+
+### Step 2: Open Terminal/Command Prompt
+
+**On Windows:**
+- Press `Win + R`
+- Type `cmd` and press Enter
+
+**On Mac:**
+- Press `Cmd + Space`
+- Type `terminal` and press Enter
+
+**On Linux:**
+- Press `Ctrl + Alt + T`
+
+---
+
+### Step 3: Navigate to Your Project Folder
+
+```bash
+# Replace the path with where you saved the files
+cd /path/to/deeposwsrm_project
+
+# For example on Windows:
+# cd C:\Users\YourName\Documents\deeposwsrm_project
+
+# For example on Mac/Linux:
+# cd ~/Documents/deeposwsrm_project
+
+# Verify you're in the right place
+ls  # Mac/Linux
+dir  # Windows
+
+# You should see all the .py files listed
+```
+
+---
+
+### Step 4: Create Virtual Environment
+
+```bash
+# Create a virtual environment named 'venv'
+python -m venv venv
+
+# If python doesn't work, try:
+python3 -m venv venv
+
+# This creates a folder called 'venv' with an isolated Python environment
+```
+
+**What this does:** Creates a separate Python environment so the packages we install don't interfere with your system Python.
+
+---
+
+### Step 5: Activate Virtual Environment
+
+**On Windows:**
+```bash
+venv\Scripts\activate
+```
+
+**On Mac/Linux:**
+```bash
+source venv/bin/activate
+```
+
+**You'll know it worked when you see `(venv)` at the start of your terminal prompt:**
+```bash
+(venv) C:\Users\YourName\Documents\deeposwsrm_project>
+```
+
+**Important:** Keep this terminal window open! You need to have the virtual environment activated for all the following steps.
+
+---
+
+### Step 6: Upgrade pip
+
+```bash
+# Upgrade pip to the latest version
+python -m pip install --upgrade pip
+```
+
+---
+
+### Step 7: Install PyTorch
+
+Choose the appropriate command for your system:
+
+**Option A: CPU Only (No GPU)**
+```bash
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+```
+
+**Option B: NVIDIA GPU (CUDA 11.8)**
+```bash
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
+```
+
+**Option C: NVIDIA GPU (CUDA 12.1)**
+```bash
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+```
+
+**How to know which to use:**
+- If you don't have an NVIDIA GPU → Use Option A
+- If you have NVIDIA GPU but unsure → Use Option A (it will work, just slower)
+- If you have NVIDIA GPU and want speed → Check your CUDA version with `nvidia-smi` and choose accordingly
+
+---
+
+### Step 8: Install Other Dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+This will install:
+- earthengine-api (for satellite data)
+- geemap (for data download)
+- rasterio (for geospatial files)
+- albumentations (for data augmentation)
+- tensorboard (for training monitoring)
+- And other necessary packages
+
+**This may take 5-10 minutes.**
+
+---
+
+### Step 9: Verify Installation
+
+```bash
+# Test if everything is installed correctly
+python -c "import torch; import ee; import rasterio; print('✓ All packages installed successfully'); print(f'PyTorch version: {torch.__version__}'); print(f'CUDA available: {torch.cuda.is_available()}')"
+```
+
+You should see:
+```
+✓ All packages installed successfully
+PyTorch version: 2.x.x
+CUDA available: True (or False if CPU-only)
+```
+
+---
+
+### Step 10: Authenticate Google Earth Engine
+
+```bash
+earthengine authenticate
+```
+
+**What happens:**
+1. A browser window will open
+2. Sign in with your Google account
+3. Click "Generate Token"
+4. Copy the authorization code
+5. Paste it back in the terminal
+6. Press Enter
+
+**You'll see:** "Successfully saved authorization token."
+
+---
+
+### Step 11: Download Training Data
+
+```bash
+python data_download.py
+```
+
+**What this does:**
+- Downloads Sentinel-1 images (SAR data)
+- Downloads Sentinel-2 images (Optical data)
+- Downloads Landsat images for reference
+- Creates water masks
+- Saves everything to `./deeposwsrm_data/`
+
+**Expected output:**
+```
+Initializing Google Earth Engine...
+Google Earth Engine initialized successfully!
+
+Preparing data for site: California_Reservoir
+Date range: 2023-06-01 to 2023-08-31
+Downloading Sentinel-1...
+Downloaded: California_Reservoir_S1.tif
+Downloading Sentinel-2...
+Downloaded: California_Reservoir_S2.tif
+...
+```
+
+**Time:** 10-30 minutes depending on number of sites and internet speed
+
+---
+
+### Step 12: Verify Downloaded Data
+
+```bash
+# Check the downloaded data
+ls deeposwsrm_data/  # Mac/Linux
+dir deeposwsrm_data\  # Windows
+```
+
+You should see folders for each site with files like:
+```
+Site1_S1.tif
+Site1_S2.tif
+Site1_reference.tif
+Site1_water_mask.tif
+```
+
+---
+
+### Step 13: Train the Model
+
+Now the exciting part - training the neural network!
+
+**Quick test run (10 epochs, ~30 minutes on GPU):**
+```bash
+python train.py \
+    --data_dir ./deeposwsrm_data \
+    --scale_factor 4 \
+    --batch_size 4 \
+    --epochs 10 \
+    --num_workers 2
+```
+
+**Full training (100 epochs, 2-6 hours on GPU):**
+```bash
+python train.py \
+    --data_dir ./deeposwsrm_data \
+    --scale_factor 4 \
+    --batch_size 8 \
+    --epochs 100 \
+    --learning_rate 1e-4 \
+    --num_workers 2
+```
+
+**Expected output:**
+```
+Using device: cuda
+Model parameters: 10,234,567
+Creating dataloaders...
+Training samples: 1600
+Validation samples: 400
+
+Starting training for 10 epochs
+Scale factor: 4
+Batch size: 4
+Learning rate: 0.0001
+
+Epoch 0: 100%|██████████| 400/400 [03:45<00:00,  1.77it/s]
+Validation: 100%|██████████| 100/100 [00:32<00:00,  3.12it/s]
+
+Epoch 0:
+  Train Loss: 0.8234 (Frac: 0.1234, SRM: 0.7000)
+  Val Loss: 0.7123 (Frac: 0.1023, SRM: 0.6100)
+  Val Accuracy: 0.8945, Val IoU: 0.8234
+  Learning Rate: 0.000100
+Saved best model with val loss: 0.7123
+```
+
+**Note:** On CPU, training will be much slower (10-20x). Consider using Google Colab with free GPU if you don't have a GPU.
+
+---
+
+### Step 14: Monitor Training (Optional)
+
+**Open a NEW terminal** (keep the training running in the first one):
+
+```bash
+# Navigate to project folder
+cd /path/to/deeposwsrm_project
+
+# Activate venv in this new terminal too
+source venv/bin/activate  # Mac/Linux
+venv\Scripts\activate     # Windows
+
+# Start TensorBoard
+tensorboard --logdir ./outputs
+```
+
+Then open your browser and go to: **http://localhost:6006**
+
+You'll see real-time graphs of:
+- Training and validation loss
+- Accuracy
+- IoU metrics
+- Learning rate
+
+---
+
+### Step 15: Find Your Trained Model
+
+After training completes, your model is saved here:
+```
+./outputs/scale4_YYYYMMDD_HHMMSS/checkpoints/best.pth
+```
+
+To find the exact path:
+```bash
+# Mac/Linux
+ls -lt ./outputs/
+
+# Windows
+dir /O-D outputs\
+```
+
+The most recent folder is your latest training run.
+
+---
+
+### Step 16: Run Inference
+
+Now use your trained model to generate water maps!
+
+```bash
+# Replace the checkpoint path with your actual path
+python inference.py \
+    --checkpoint ./outputs/scale4_20241028_143052/checkpoints/best.pth \
+    --sentinel1 ./deeposwsrm_data/California_Reservoir/California_Reservoir_S1.tif \
+    --sentinel2 ./deeposwsrm_data/California_Reservoir/California_Reservoir_S2.tif \
+    --output ./results/water_map.tif \
+    --visualize
+```
+
+**Expected output:**
+```
+Using device: cuda
+Loaded model from epoch 99
+Scale factor: 4
+Processing:
+  Sentinel-1: ./deeposwsrm_data/California_Reservoir/California_Reservoir_S1.tif
+  Sentinel-2: ./deeposwsrm_data/California_Reservoir/California_Reservoir_S2.tif
+Processing 480x480 image in patches...
+100%|██████████| 4/4 [00:12<00:00,  3.12it/s]
+Saved fraction map: ./results/water_map_fraction.tif
+Saved probability map: ./results/water_map_probability.tif
+Saved binary map: ./results/water_map.tif
+Saved visualization: ./results/water_map_visualization.png
+
+Inference completed successfully!
+```
+
+---
+
+### Step 17: View Results
+
+```bash
+# On Mac
+open ./results/water_map_visualization.png
+
+# On Windows
+start ./results/water_map_visualization.png
+
+# On Linux
+xdg-open ./results/water_map_visualization.png
+```
+
+You'll see a visualization showing:
+1. Sentinel-2 RGB image
+2. Water fraction (coarse resolution)
+3. Water map (fine resolution with super-resolution)
+
+---
+
+## 🎯 Complete Command Sequence (Copy-Paste)
+
+Here's the complete sequence you can copy and paste:
+
+```bash
+# 1. Navigate to project
+cd /path/to/deeposwsrm_project
+
+# 2. Create and activate virtual environment
+python -m venv venv
+source venv/bin/activate  # Mac/Linux
+# OR
+venv\Scripts\activate     # Windows
+
+# 3. Install packages
+python -m pip install --upgrade pip
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+pip install -r requirements.txt
+
+# 4. Authenticate GEE
+earthengine authenticate
+
+# 5. Download data
+python data_download.py
+
+# 6. Train model (quick test)
+python train.py --data_dir ./deeposwsrm_data --scale_factor 4 --epochs 10 --batch_size 4
+
+# 7. Run inference
+python inference.py \
+    --checkpoint ./outputs/scale4_*/checkpoints/best.pth \
+    --sentinel1 ./deeposwsrm_data/*/Site*_S1.tif \
+    --sentinel2 ./deeposwsrm_data/*/Site*_S2.tif \
+    --output ./results/water_map.tif \
+    --visualize
+```
+
+---
+
+## 🔧 Troubleshooting in Virtual Environment
+
+### Problem: "python: command not found"
+```bash
+# Try python3 instead
+python3 -m venv venv
+```
+
+### Problem: "pip: command not found"
+```bash
+# Use python -m pip instead
+python -m pip install -r requirements.txt
+```
+
+### Problem: Virtual environment not activating
+```bash
+# Make sure you're in the right directory
+pwd  # Should show your project directory
+
+# Try with full path
+source /full/path/to/venv/bin/activate
+```
+
+### Problem: "Permission denied" when creating venv
+```bash
+# Try with --user flag
+python -m venv venv --user
+```
+
+### Problem: Packages not found after installation
+```bash
+# Make sure venv is activated (you should see (venv) in prompt)
+# If not, activate it again:
+source venv/bin/activate  # Mac/Linux
+venv\Scripts\activate     # Windows
+
+# Verify which python you're using
+which python  # Mac/Linux
+where python  # Windows
+
+# Should show path to venv/bin/python
+```
+
+### Problem: "No module named 'torch'"
+```bash
+# Make sure you installed PyTorch
+pip list | grep torch
+
+# If not found, install again
+pip install torch torchvision
+```
+
+---
+
+## 📊 What Each File Does
+
+| File | Purpose | When to Run |
+|------|---------|-------------|
+| `deeposwsrm_model.py` | Model architecture | Never run directly (imported by others) |
+| `data_download.py` | Downloads satellite data | Once (or when you need more data) |
+| `dataset.py` | Data loading | Never run directly (imported by train.py) |
+| `train.py` | Trains the model | Once per experiment |
+| `inference.py` | Generates water maps | Every time you want to analyze new images |
+
+---
+
+## 🔄 Daily Workflow After Initial Setup
+
+After you've done the initial setup, here's what you do each time:
+
+```bash
+# 1. Open terminal and navigate to project
+cd /path/to/deeposwsrm_project
+
+# 2. Activate virtual environment
+source venv/bin/activate  # Mac/Linux
+venv\Scripts\activate     # Windows
+
+# 3. Run whatever you need
+python inference.py ...  # or train.py, etc.
+
+# 4. When done, deactivate
+deactivate
+```
+
+---
+
+## ⚠️ Important Notes
+
+1. **Always activate venv first** - Before running any Python commands
+2. **One venv per project** - Don't create multiple venvs in the same project
+3. **Don't commit venv to Git** - It's large and specific to your machine
+4. **Keep terminal open** - While training or downloading data
+5. **GPU vs CPU** - Training on CPU will be 10-20x slower
+
+---
+
+## ✅ Success Checklist
+
+- [ ] Virtual environment created (`venv` folder exists)
+- [ ] Virtual environment activated (see `(venv)` in prompt)
+- [ ] All packages installed (`pip list` shows packages)
+- [ ] GEE authenticated (can run earthengine commands)
+- [ ] Data downloaded (`deeposwsrm_data` folder has data)
+- [ ] Model trained (checkpoints exist in `outputs`)
+- [ ] Inference works (water maps generated in `results`)
+
+---
+
+## 🎓 Understanding Virtual Environments
+
+**What is a virtual environment?**
+- Isolated Python environment for your project
+- Keeps packages separate from system Python
+- Prevents version conflicts between projects
+
+**Benefits:**
+- Clean separation of project dependencies
+- Easy to recreate on another machine
+- Can have different package versions per project
+- Safe to delete and recreate if something goes wrong
+
+**Commands to remember:**
+```bash
+# Create venv
+python -m venv venv
+
+# Activate
+source venv/bin/activate  # Mac/Linux
+venv\Scripts\activate     # Windows
+
+# Deactivate
+deactivate
+
+# Delete venv (if needed)
+rm -rf venv  # Mac/Linux
+rmdir /s venv  # Windows
+```
+
+---
+
+## 🚀 Quick Start Script
+
+Save this as `setup.sh` (Mac/Linux) or `setup.bat` (Windows) and run it:
+
+**setup.sh (Mac/Linux):**
+```bash
+#!/bin/bash
+echo "Setting up DeepOSWSRM..."
+python3 -m venv venv
+source venv/bin/activate
+pip install --upgrade pip
+pip install torch torchvision
+pip install -r requirements.txt
+echo "Setup complete! Now run: earthengine authenticate"
+```
+
+**setup.bat (Windows):**
+```batch
+@echo off
+echo Setting up DeepOSWSRM...
+python -m venv venv
+call venv\Scripts\activate
+pip install --upgrade pip
+pip install torch torchvision
+pip install -r requirements.txt
+echo Setup complete! Now run: earthengine authenticate
+```
+
+Make executable and run:
+```bash
+# Mac/Linux
+chmod +x setup.sh
+./setup.sh
+
+# Windows
+setup.bat
+```
+
+---
+
+Happy water mapping with virtual environments! 🌊
