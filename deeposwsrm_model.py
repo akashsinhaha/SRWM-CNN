@@ -154,6 +154,8 @@ class DecoderBlock(nn.Module):
         # Add 1x1 conv to adjust channels after concatenation
         self.conv_adjust = nn.Conv2d(out_channels + skip_channels, out_channels, kernel_size=1)
         self.conv_block = ResidualBlock(out_channels)
+        self.dropout = nn.Dropout2d(p=0.1)  # Add dropout
+
     
     def forward(self, x, skip):
         x = self.transpose_conv(x)
@@ -161,6 +163,7 @@ class DecoderBlock(nn.Module):
         x = torch.cat([x, skip], dim=1)
         # Adjust channels to out_channels
         x = self.conv_adjust(x)
+        x = self.dropout(x)  # Apply dropout
         # Apply residual block
         x = self.conv_block(x)
         return x

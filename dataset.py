@@ -69,6 +69,9 @@ class DeepOSWSRMDataset(Dataset):
                 A.HorizontalFlip(p=0.5),
                 A.VerticalFlip(p=0.5),
                 A.RandomRotate90(p=0.5),
+                A.RandomBrightnessContrast(p=0.3),  # Add this
+                A.GaussNoise(p=0.2),                # Add this
+                A.ElasticTransform(p=0.2), 
             ], is_check_shapes=False)  # FIXED: Disable shape checking
         else:
             self.transform = None

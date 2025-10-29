@@ -81,6 +81,10 @@ class Trainer:
         self.best_val_loss = float('inf')
         self.train_losses = []
         self.val_losses = []
+
+        self.patience = config.get('patience', 15)
+        self.patience_counter = 0
+        self.min_delta = config.get('min_delta', 0.001)
     
     def save_checkpoint(self, is_best=False):
         """Save model checkpoint"""
