@@ -222,12 +222,28 @@ class WaterMapper:
         """
         # Load Sentinel-2 for RGB
         with rasterio.open(sentinel2_path) as src:
-            # Assuming bands are B, G, R, NIR
-            s2_data = src.read([3, 2, 1])  # RGB
+            # Read all bands first
+            all_bands = src.read()
+            
+            # Sentinel-2 bands: [B2, B3, B4, B8] = [Blue, Green, Red, NIR]
+            # For RGB we need: [Red, Green, Blue] = [B4, B3, B2] = indices [2, 1, 0]
+            if all_bands.shape[0] >= 4:
+                s2_data = all_bands[[2, 1, 0]]  # Red, Green, Blue
+            elif all_bands.shape[0] == 3:
+                s2_data = all_bands  # Already RGB
+            else:
+                s2_data = all_bands  # Use whatever is available
         
         # Normalize for display
         s2_rgb = np.transpose(s2_data, (1, 2, 0))
-        s2_rgb = np.clip(s2_rgb * 3, 0, 1)  # Enhance brightness
+
+        # Check if data needs normalization
+        if s2_rgb.max() > 1.0:
+            # Data is in reflectance * 10000 format
+            s2_rgb = s2_rgb / 10000.0
+
+        # Enhance brightness and clip
+        s2_rgb = np.clip(s2_rgb * 3.5, 0, 1)  # Increased from 3 to 3.5
         
         # Create figure
         fig, axes = plt.subplots(1, 3, figsize=(18, 6))

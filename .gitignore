@@ -25,3 +25,4 @@ temp/
 /outputs/
 credentials.json
 token.pickle
+/results*
