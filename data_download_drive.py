@@ -129,7 +129,7 @@ class SentinelDataDownloader:
         )
         
         task.start()
-        print(f"  ✓ Started export: {description}")
+        print(f"   Started export: {description}")
         return task
     
     def wait_for_tasks(self, tasks, check_interval=60):
@@ -168,13 +168,13 @@ class SentinelDataDownloader:
                         if state == 'COMPLETED':
                             completed.add(i)
                             pbar.update(1)
-                            tqdm.write(f"✓ Completed: {desc}")
+                            tqdm.write(f" Completed: {desc}")
                         elif state == 'FAILED':
                             failed.add(i)
                             pbar.update(1)
                             error = status.get('error_message', 'Unknown error')
-                            tqdm.write(f"✗ Failed: {desc}")
-                            tqdm.write(f"  Error: {error}")
+                            tqdm.write(f" Failed: {desc}")
+                            tqdm.write(f" Error: {error}")
                         elif state == 'RUNNING':
                             progress = status.get('progress', 0)
                             tqdm.write(f"⏳ Running: {desc} ({progress:.1%})", end='\r')
@@ -188,8 +188,8 @@ class SentinelDataDownloader:
         print(f"\n{'='*60}")
         print(f"Export Summary")
         print(f"{'='*60}")
-        print(f"✓ Completed: {len(completed)}/{len(tasks)}")
-        print(f"✗ Failed: {len(failed)}/{len(tasks)}")
+        print(f" Completed: {len(completed)}/{len(tasks)}")
+        print(f" Failed: {len(failed)}/{len(tasks)}")
         print(f"{'='*60}\n")
         
         return list(completed), list(failed)
@@ -264,12 +264,12 @@ class SentinelDataDownloader:
             return metadata, tasks
             
         except Exception as e:
-            print(f"   ✗ Error: {e}")
+            print(f"    Error: {e}")
             return None, []
 
 
 def prepare_sample_training_sites():
-    """Prepare sample training sites with 10× ROI areas"""
+    """ training sites """
     
     sites = [
         {
@@ -409,11 +409,6 @@ def main():
     print("DeepOSWSRM - Export to Google Drive")
     print("="*60)
     print("This script will export satellite data to Google Drive.")
-    print("Benefits:")
-    print("  • No local storage constraints")
-    print("  • Exports run in background")
-    print("  • Data persists in cloud")
-    print("  • Can download selectively later")
     print("="*60 + "\n")
     
     # Configuration
@@ -459,7 +454,7 @@ def main():
                 all_tasks.extend(tasks)
             
         except Exception as e:
-            print(f"   ✗ Error: {e}")
+            print(f"    Error: {e}")
             continue
     
     # Save metadata
@@ -481,9 +476,9 @@ def main():
     print(f"\n{'='*60}")
     print("Export Summary")
     print(f"{'='*60}")
-    print(f"✓ Started {len(all_tasks)} export tasks")
-    print(f"✓ Exporting to Google Drive folder: '{DRIVE_FOLDER}'")
-    print(f"✓ Metadata saved: {metadata_path}")
+    print(f" Started {len(all_tasks)} export tasks")
+    print(f" Exporting to Google Drive folder: '{DRIVE_FOLDER}'")
+    print(f" Metadata saved: {metadata_path}")
     print(f"{'='*60}")
     
     # Wait for completion or exit
